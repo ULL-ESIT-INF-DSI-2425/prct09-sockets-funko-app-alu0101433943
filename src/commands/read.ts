@@ -26,25 +26,26 @@ export interface ReadFunkoArgs {
  * @param argv - Objeto que contiene los argumentos de la interfaz de línea de comandos.
  * @returns No devuelve ningún valor, pero imprime mensajes en la consola.
  */
-export const readFunko = (argv: ReadFunkoArgs) => {
+/**
+ * Lee un Funko de la colección de un usuario.
+ *
+ * @param argv - Objeto que contiene los argumentos de la interfaz de línea de comandos.
+ * @returns El Funko en formato de datos o `null` si no se encuentra.
+ */
+export const readFunko = (argv: ReadFunkoArgs): Funko | null => {
   const userFolder = getUserFolder(argv.user);
   const filePath = path.join(userFolder, `${argv.id}.json`);
 
   if (!fs.existsSync(filePath)) {
-    console.log(
-      chalk.red(
-        `Error: No se encontró un Funko con ID ${argv.id} en la colección de ${argv.user}.`,
-      ),
-    );
-    return;
+    return null; // Devolver null si no se encuentra el archivo
   }
 
   try {
     const funkoData = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-    console.log(chalk.blueBright(`Información del Funko con ID ${argv.id}`));
-    console.log(formatFunkoData(funkoData));
+    return funkoData; // Devolver los datos del Funko si se encuentra
   } catch (error) {
     console.log(chalk.red(`Error al leer el Funko: ${error.message}`));
+    return null; // Devolver null si hubo un error al leer el archivo
   }
 };
 

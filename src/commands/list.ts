@@ -26,38 +26,29 @@ export interface ListFunkoArgs {
  * @param argv - Objeto que contiene los argumentos de la interfaz de línea de comandos.
  * @returns No devuelve ningún valor, pero imprime mensajes en la consola.
  */
-export const listFunkos = (argv: ListFunkoArgs) => {
+export const listFunkos = (argv: ListFunkoArgs): string => {
+  // 🔹 Ahora devuelve un string
   const userFolder = getUserFolder(argv.user);
-
   if (!fs.existsSync(userFolder)) {
-    console.log(
-      chalk.red(`Error: No se encontró la colección de ${argv.user}.`),
-    );
-    return;
+    return chalk.red(`No se encontró la colección de ${argv.user}.`);
   }
 
   const funkoFiles = fs.readdirSync(userFolder);
-
   if (funkoFiles.length === 0) {
-    console.log(chalk.yellow(`La colección de ${argv.user} está vacía.`));
-    return;
+    return chalk.yellow(`La colección de ${argv.user} está vacía.`);
   }
 
-  console.log(chalk.blueBright(`Colección de Funkos de ${argv.user}`));
-  console.log(chalk.blue("--------------------------------"));
+  let result = chalk.blueBright(`Colección de Funkos de ${argv.user}\n`);
+  result += chalk.blue("--------------------------------\n");
 
-  /**
-   * Itera sobre cada archivo de Funko y muestra su información.
-   * @param file - Nombre del archivo de Funko.
-   * @returns No devuelve ningún valor, pero imprime mensajes en la consola.
-   */
   funkoFiles.forEach((file) => {
     const filePath = path.join(userFolder, file);
     const funkoData = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-
-    console.log(formatFunkoData(funkoData));
-    console.log(chalk.blue("--------------------------------"));
+    result += formatFunkoData(funkoData) + "\n";
+    result += chalk.blue("--------------------------------\n");
   });
+
+  return result; // 🔹 Devuelve el string con el listado
 };
 
 /**

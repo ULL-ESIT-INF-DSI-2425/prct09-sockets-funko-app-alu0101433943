@@ -29,12 +29,12 @@ export interface RemoveFunkoArgs {
  * @param argv - Objeto que contiene los argumentos de la interfaz de línea de comandos.
  * @returns No devuelve ningún valor, pero imprime mensajes en la consola.
  */
-export const deleteFunko = (argv: RemoveFunkoArgs) => {
+export const deleteFunko = (argv: RemoveFunkoArgs): boolean => {
   if (isNaN(argv.id) || argv.id <= 0) {
     console.log(
-      chalk.red("Error: El ID del Funko debe ser un número positivo."),
+      chalk.red("El ID del Funko debe ser un número positivo."),
     );
-    return;
+    return false;
   }
 
   const userFolder = getUserFolder(argv.user);
@@ -42,10 +42,10 @@ export const deleteFunko = (argv: RemoveFunkoArgs) => {
   if (!fs.existsSync(userFolder)) {
     console.log(
       chalk.red(
-        `Error: El usuario "${argv.user}" no tiene Funkos almacenados.`,
+        `El usuario "${argv.user}" no tiene Funkos almacenados.`,
       ),
     );
-    return;
+    return false;
   }
 
   const filePath = path.join(userFolder, `${argv.id}.json`);
@@ -56,7 +56,7 @@ export const deleteFunko = (argv: RemoveFunkoArgs) => {
         `Error: No se encontró un Funko con ID ${argv.id} en la colección de ${argv.user}.`,
       ),
     );
-    return;
+    return false;
   }
 
   try {
@@ -69,4 +69,6 @@ export const deleteFunko = (argv: RemoveFunkoArgs) => {
   } catch (error) {
     console.log(chalk.red(`Error al eliminar el Funko: ${error.message}`));
   }
+
+  return true;
 };

@@ -3,6 +3,7 @@ import path from "path";
 import chalk from "chalk";
 import { fileURLToPath } from "url";
 import { FunkoGenre, FunkoType } from "../models/funko.js";
+import { readFunko } from "./read.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -39,40 +40,38 @@ export interface UpdateFunkoArgs {
  * @param argv - Objeto que contiene los argumentos de la interfaz de línea de comandos.
  * @returns No devuelve ningún valor, pero imprime mensajes en la consola.
  */
-export const updateFunko = (argv: UpdateFunkoArgs) => {
+export const updateFunko = (argv: UpdateFunkoArgs): boolean => {
   const userFolder = getUserFolder(argv.user);
   const filePath = path.join(userFolder, `${argv.id}.json`);
 
-  if (!fs.existsSync(filePath)) {
+  // Primero verifica si el Funko existe
+  const existingFunko = readFunko({ id: argv.id, user: argv.user });
+
+  if (!existingFunko) {
+    // Si no existe, muestra el mensaje de error
     console.log(
       chalk.red(
         `Error: No se encontró un Funko con ID ${argv.id} en la lista de ${argv.user}.`,
       ),
     );
-    return;
+    return false; // Detiene la ejecución
   }
 
   if (!Object.values(FunkoType).includes(argv.type as FunkoType)) {
     console.log(chalk.red(`Tipo de Funko inválido: ${argv.type}`));
-    return;
+    return false;
   }
 
   if (!Object.values(FunkoGenre).includes(argv.genre as FunkoGenre)) {
     console.log(chalk.red(`Género de Funko inválido: ${argv.genre}`));
-    return;
+    return false;
   }
 
   try {
-    const funkoData = JSON.parse(fs.readFileSync(filePath, "utf-8"));
     const updatedFunko = {
-      ...funkoData,
+      ...existingFunko,
       ...Object.fromEntries(
         Object.entries(argv).filter(
-          /**
-           * Filtra los valores indefinidos y las claves no deseadas.
-           * @param param0 - Par clave-valor.
-           * @returns Verdadero si el valor no es indefinido y la clave no es "_", "$0", "user" o "id".
-           */
           ([key, value]) =>
             value !== undefined && !["_", "$0", "user", "id"].includes(key),
         ),
@@ -86,4 +85,6 @@ export const updateFunko = (argv: UpdateFunkoArgs) => {
   } catch (error) {
     console.log(chalk.red(`Error al modificar el Funko: ${error.message}`));
   }
+
+  return true;
 };
