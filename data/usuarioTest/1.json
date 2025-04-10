@@ -1,0 +1,12 @@
+{
+  "id": 1,
+  "name": "FunkoTest",
+  "description": "Descripción de prueba",
+  "type": "Pop! Anime",
+  "genre": "Ánime",
+  "franchise": "FranquiciaTest",
+  "number": 1,
+  "exclusive": false,
+  "specialFeatures": "",
+  "marketValue": 100
+}

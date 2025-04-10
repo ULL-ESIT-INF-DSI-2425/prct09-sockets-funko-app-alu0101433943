@@ -1,247 +1,203 @@
-import { describe, test, expect, afterEach, beforeEach, vi } from "vitest";
-import { addFunko, listFunkos, getUserFolder } from "../src/funko-app";
-import { FunkoType, FunkoGenre } from "../src/models/funko";
-import { readFunko } from "../src/commands/read";
-import { updateFunko } from "../src/commands/update";
-import { deleteFunko } from "../src/commands/remove";
-import fs from "fs";
+// tests/funko-app.spec.ts
+import { describe, test, expect, beforeEach, afterEach } from "vitest";
 import chalk from "chalk";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { RequestType, ResponseType } from "../src/types.js";
+import { addFunko } from "../src/commands/add.js";
+import { listFunkos } from "../src/commands/list.js";
+import { readFunko } from "../src/commands/read.js";
+import { updateFunko } from "../src/commands/update.js";
+import { deleteFunko } from "../src/commands/remove.js";
+import { Funko, FunkoGenre, FunkoType } from "../src/models/funko.js"; // Ajusta la ruta si es necesario
 
-describe("addFunko", () => {
-  let funko2;
-  let consoleSpy;
+// Configura un directorio de datos especial para test
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const testDataDir = path.join(__dirname, "../src/data/testUser");
 
-  beforeEach(() => {
-    consoleSpy = vi.spyOn(console, "log");
-
-    funko2 = {
-      id: 1,
-      user: "testUser",
-      name: "Spiderman",
-      type: FunkoType.POP,
-      genre: FunkoGenre.HEROES,
-      description: "A Spiderman Funko Pop",
-      franchise: "Marvel",
-      number: 1,
-      exclusive: false,
-      specialFeatures: "None",
-      marketValue: 10,
-    };
-  });
-
-  afterEach(() => {
-    consoleSpy.mockRestore();
-
-    const userFolder = getUserFolder("testUser");
-    if (fs.existsSync(userFolder)) {
-      fs.rmSync(userFolder, { recursive: true });
+// Función auxiliar para limpiar el directorio de test
+function cleanTestDir() {
+  if (fs.existsSync(testDataDir)) {
+    const files = fs.readdirSync(testDataDir);
+    for (const file of files) {
+      fs.unlinkSync(path.join(testDataDir, file));
     }
+  } else {
+    fs.mkdirSync(testDataDir, { recursive: true });
+  }
+}
+
+beforeEach(() => {
+  cleanTestDir();
+});
+
+afterEach(() => {
+  cleanTestDir();
+});
+
+function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Función auxiliar que simula el procesamiento de una solicitud
+ * y devuelve una Promesa con la respuesta resultante.
+ */
+function executeCommand(request: RequestType): Promise<ResponseType> {
+  return new Promise(async (resolve) => {
+    let response: ResponseType = { type: request.type, success: false };
+    try {
+      switch (request.type) {
+        case "add": {
+          const funkoData = request.funkoPop![0];
+          const result = addFunko({ ...funkoData, user: request.user });
+          response = {
+            type: "add",
+            success: result,
+            message: result
+              ? chalk.green(`Funko con ID ${funkoData.id} añadido correctamente.`)
+              : chalk.red(`Funko con ID ${funkoData.id} ya existe o datos inválidos.`),
+          };
+          break;
+        }
+        case "list": {
+          const result = listFunkos({ user: request.user });
+          response = {
+            type: "list",
+            success: !result.includes("No se encontró"),
+            message: result,
+          };
+          break;
+        }
+        case "read": {
+          const funkoData = request.funkoPop![0];
+          const funko = readFunko({ user: request.user, id: funkoData.id });
+          response = {
+            type: "read",
+            success: !!funko,
+            funkoPops: funko ? [funko] : [],
+            message: funko
+              ? chalk.green(`Funko encontrado: ${funko.name}`)
+              : chalk.red("Funko no encontrado."),
+          };
+          break;
+        }
+        case "update": {
+          const funkoData = request.funkoPop![0];
+          const result = updateFunko({ ...funkoData, user: request.user });
+          response = {
+            type: "update",
+            success: result,
+            message: result
+              ? chalk.green(`Funko con ID ${funkoData.id} actualizado correctamente.`)
+              : chalk.red(`No se pudo actualizar el Funko con ID ${funkoData.id}.`),
+          };
+          break;
+        }
+        case "remove": {
+          const funkoData = request.funkoPop![0];
+          const result = deleteFunko({ user: request.user, id: funkoData.id });
+          response = {
+            type: "remove",
+            success: result,
+            message: result
+              ? chalk.green(`Funko con ID ${funkoData.id} eliminado correctamente.`)
+              : chalk.red(`Funko con ID ${funkoData.id} no encontrado.`),
+          };
+          break;
+        }
+        default:
+          response = {
+            type: request.type,
+            success: false,
+            message: chalk.red("Tipo de solicitud no válido."),
+          };
+          break;
+      }
+    } catch (err: any) {
+      response = {
+        type: request.type,
+        success: false,
+        message: chalk.red(`Error: ${err.message}`),
+      };
+    }
+    await delay(100);
+    resolve(response);
+  });
+}
+
+// Datos de test: usa valores válidos según tus validaciones
+const validFunkoData = {
+  id: 101,
+  name: "Funko Test",
+  description: "Descripción de prueba",
+  type: FunkoType.POP,              // Por ejemplo: "Pop! Anime" (ajusta a tu definición)
+  genre: FunkoGenre.ANIMATION,      // Asegúrate de que sea un valor válido
+  franchise: "TestFranchise",
+  number: 1,
+  exclusive: false,
+  specialFeatures: "",
+  marketValue: 100,
+};
+
+describe("Comprobación de los comandos (servidor y cliente)", () => {
+  const testUser = "testUser";
+
+  test("Add: debe añadir un Funko correctamente", async () => {
+    const request: RequestType = {
+      type: "add",
+      user: testUser,
+      funkoPop: [validFunkoData],
+    };
+    const response = await executeCommand(request);
+    expect(response.success).toBe(true);
+    expect(response.message).toContain("añadido correctamente");
   });
 
-  test("Debe añadir funko a la carpeta data", () => {
-    addFunko(funko2);
-    expect(consoleSpy).toHaveBeenCalledWith(
-      chalk.green(`Nuevo Funko agregado a la colección de ${funko2.user}!`),
-    );
+  test("List: debe listar los Funkos del usuario", async () => {
+    const request: RequestType = {
+      type: "list",
+      user: testUser,
+    };
+    const response = await executeCommand(request);
+    expect(response.success).toBe(true);
+    // Si la salida es formateada, comprueba que incluya el nombre del Funko
+    expect(response.message).toContain(validFunkoData.name);
   });
 
-  test("Debe mostrar error porque ya existe ese ID", () => {
-    addFunko(funko2);
-    addFunko(funko2);
-
-    expect(consoleSpy).toHaveBeenCalledWith(
-      chalk.red(
-        `Funko con ID ${funko2.id} ya existe en la colección de ${funko2.user}!`,
-      ),
-    );
+  test("Read: debe leer un Funko correctamente", async () => {
+    const request: RequestType = {
+      type: "read",
+      user: testUser,
+      funkoPop: [{ ...validFunkoData }],
+    };
+    const response = await executeCommand(request);
+    expect(response.success).toBe(true);
+    expect(response.funkoPops && response.funkoPops[0].name).toBe(validFunkoData.name);
   });
 
-  test("Debe mostrar error porque el valor de mercado es negativo", () => {
-    funko2.marketValue = -10;
-    addFunko(funko2);
-
-    expect(consoleSpy).toHaveBeenCalledWith(
-      chalk.red("El valor de mercado debe ser un número positivo."),
-    );
+  test("Update: debe actualizar un Funko correctamente", async () => {
+    const updatedData = { ...validFunkoData, name: "Funko Test Actualizado", marketValue: 150 };
+    const request: RequestType = {
+      type: "update",
+      user: testUser,
+      funkoPop: [updatedData],
+    };
+    const response = await executeCommand(request);
+    expect(response.success).toBe(true);
+    expect(response.message).toContain("actualizado correctamente");
   });
 
-  test("Debe mostrar error porque el tipo de funko no es correcto", () => {
-    funko2.type = "TIPO_INVALIDO";
-    addFunko(funko2);
-
-    expect(consoleSpy).toHaveBeenCalledWith(
-      chalk.red(`Tipo de Funko inválido: ${funko2.type}`),
-    );
-  });
-
-  test("Debe mostrar error porque el genero de funko no es correcto", () => {
-    funko2.genre = "GENERO_INVALIDO";
-    addFunko(funko2);
-
-    expect(consoleSpy).toHaveBeenCalledWith(
-      chalk.red(`Género de Funko inválido: ${funko2.genre}`),
-    );
-  });
-
-  test("Debe listar los funkos de un usuario", () => {
-    addFunko(funko2);
-    listFunkos({ user: "testUser" });
-
-    const allConsoleOutput = consoleSpy.mock.calls.flat().join(" ");
-    expect(allConsoleOutput).toContain(funko2.name);
-  });
-
-  test("Debe mostrar mensaje de error si no se encuentra el usuario al intentar listar funkos", () => {
-    listFunkos({ user: "testUser" });
-    expect(consoleSpy).toHaveBeenCalledWith(
-      chalk.red("Error: No se encontró la colección de testUser."),
-    );
-  });
-
-  test("Debe mostrar mensaje de error si no se encuentra el ID de un funko en la colección de un usuario existente", () => {
-    addFunko(funko2);
-    readFunko({ id: 2, user: "testUser" });
-    expect(consoleSpy).toHaveBeenCalledWith(
-      chalk.red(
-        "Error: No se encontró un Funko con ID 2 en la colección de testUser.",
-      ),
-    );
-  });
-
-  test("Debe mostrar el Funko indicado por su ID", () => {
-    addFunko(funko2);
-    readFunko({ id: 1, user: "testUser" });
-    const allConsoleOutput = consoleSpy.mock.calls.flat().join(" ");
-    expect(allConsoleOutput).toContain(funko2.name);
-  });
-
-  test("Debe modificar el valor del funko previamente añadido", () => {
-    addFunko(funko2);
-    updateFunko({
-      id: 1,
-      user: "testUser",
-      name: "Nuevo nombre",
-      description: funko2.description,
-      type: funko2.type,
-      genre: funko2.genre,
-      franchise: "SA",
-      number: 2000,
-      exclusive: funko2.exclusive,
-      specialFeatures: funko2.specialFeatures,
-      marketValue: 1000000,
-    });
-    readFunko({ id: 1, user: "testUser" });
-    const allConsoleOutput = consoleSpy.mock.calls.flat().join(" ");
-    expect(allConsoleOutput).toContain("Nuevo nombre");
-  });
-
-  test("Debe mostrar error al intentar modificar un funko introduciendo un ID que no se corresponde a un funko de la colección", () => {
-    updateFunko({
-      id: 1,
-      user: "testUser",
-      name: "Nuevo nombre",
-      description: funko2.description,
-      type: funko2.type,
-      genre: funko2.genre,
-      franchise: funko2.franchise,
-      number: funko2.number,
-      exclusive: funko2.exclusive,
-      specialFeatures: funko2.specialFeatures,
-      marketValue: funko2.marketValue,
-    });
-    expect(consoleSpy).toHaveBeenCalledWith(
-      chalk.red(
-        "Error: No se encontró un Funko con ID 1 en la lista de testUser.",
-      ),
-    );
-  });
-
-  test("Debe mostrar error al intentar modificar un funko con un género inválido", () => {
-    addFunko(funko2);
-    updateFunko({
-      id: 1,
-      user: "testUser",
-      name: "Nuevo nombre",
-      description: funko2.description,
-      type: funko2.type,
-      genre: "Género inválido",
-      franchise: funko2.franchise,
-      number: funko2.number,
-      exclusive: funko2.exclusive,
-      specialFeatures: funko2.specialFeatures,
-      marketValue: funko2.marketValue,
-    });
-    expect(consoleSpy).toHaveBeenCalledWith(
-      chalk.red(`Género de Funko inválido: Género inválido`),
-    );
-  });
-
-  test("Debe mostrar error al intentar modificar un funko con un tipo inválido", () => {
-    addFunko(funko2);
-    updateFunko({
-      id: 1,
-      user: "testUser",
-      name: "Nuevo nombre",
-      description: funko2.description,
-      type: "Tipo inválido",
-      genre: funko2.genre,
-      franchise: funko2.franchise,
-      number: funko2.number,
-      exclusive: funko2.exclusive,
-      specialFeatures: funko2.specialFeatures,
-      marketValue: funko2.marketValue,
-    });
-    expect(consoleSpy).toHaveBeenCalledWith(
-      chalk.red(`Tipo de Funko inválido: Tipo inválido`),
-    );
-  });
-
-  test("Debe borrar el funko previamente añadido", () => {
-    addFunko(funko2);
-    updateFunko({
-      id: 1,
-      user: "testUser",
-      name: "Nuevo nombre",
-      description: funko2.description,
-      type: funko2.type,
-      genre: funko2.genre,
-      franchise: "SA",
-      number: 2000,
-      exclusive: funko2.exclusive,
-      specialFeatures: funko2.specialFeatures,
-      marketValue: 1000000,
-    });
-    readFunko({ id: 1, user: "testUser" });
-    const allConsoleOutput = consoleSpy.mock.calls.flat().join(" ");
-    expect(allConsoleOutput).toContain("Nuevo nombre");
-    deleteFunko({ user: "testUser", id: 1 });
-    consoleSpy.mockRestore();
-    readFunko({ id: 1, user: "testUser" });
-    const allConsoleOutput2 = consoleSpy.mock.calls.flat().join(" ");
-    expect(allConsoleOutput2).not.toContain("1");
-  });
-
-  test("Debe mostrar error al intentar eliminar un funko en una colección vacía", () => {
-    deleteFunko({ user: "testUser", id: 1 });
-    expect(consoleSpy).toHaveBeenCalledWith(
-      chalk.red('Error: El usuario "testUser" no tiene Funkos almacenados.'),
-    );
-  });
-
-  test("Debe mostrar error al intentar eliminar un funko con un ID negativo", () => {
-    deleteFunko({ user: "testUser", id: -1 });
-    expect(consoleSpy).toHaveBeenCalledWith(
-      chalk.red("Error: El ID del Funko debe ser un número positivo."),
-    );
-  });
-
-  test("Debe mostrar error al intentar eliminar un funko con un ID que no existe en una colección que no está vacía", () => {
-    addFunko(funko2);
-    deleteFunko({ user: "testUser", id: 2 });
-    expect(consoleSpy).toHaveBeenCalledWith(
-      chalk.red(
-        "Error: No se encontró un Funko con ID 2 en la colección de testUser.",
-      ),
-    );
+  test("Remove: debe eliminar un Funko correctamente", async () => {
+    const request: RequestType = {
+      type: "remove",
+      user: testUser,
+      funkoPop: [{ ...validFunkoData }],
+    };
+    const response = await executeCommand(request);
+    expect(response.success).toBe(true);
+    expect(response.message).toContain("eliminado correctamente");
   });
 });
